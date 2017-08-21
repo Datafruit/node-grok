@@ -1,6 +1,6 @@
 {
   "name": "node-grok",
-  "version": "2.0.3",
+  "version": "2.0.4",
   "description": "Regular expression template library inspired by logstash grok filter module",
   "repository": "https://github.com/Beh01der/node-grok.git",
   "main": "./lib/index.js",
@@ -18,6 +18,9 @@
   "dependencies": {
     "async": "1.5.2",
     "collections": "3.0.0",
+    "lodash": "^4.17.4",
+    "moment": "^2.18.1",
+    "moment-jdateformatparser": "^1.1.0",
     "oniguruma": "6.1.0"
   },
   "devDependencies": {
