@@ -2,10 +2,19 @@ var fs = require('fs');
 var async = require('async');
 var OnigRegExp = require('oniguruma').OnigRegExp;
 var Map = require('collections/fast-map');
-var toNumber = require('lodash/toNumber');
-var toInt = require('lodash/toSafeInteger');
-var identity = require('lodash/identity');
 var moment = require('moment-jdateformatparser');
+import _ from 'lodash'
+
+function partitionBy(arr, func) {
+    if (_.isEmpty(arr)) {
+        return arr
+    }
+    let toComp = func(arr[0], 0);
+    let partial0 = _.takeWhile(arr, (e, idx) => _.isEqual(toComp, func(e, idx)));
+
+    let tookCount = partial0.length;
+    return [partial0, ...partitionBy(_.drop(arr, tookCount), (e, idx) => func(e, tookCount + idx))]
+}
 
 function toBoolean(str) {
     return str === 'true'
@@ -27,18 +36,18 @@ function toTimestamp(str, pattern) {
 }
 
 const TypeConverter = {
-  byte: toInt,
+  byte: _.toSafeInteger,
   boolean: toBoolean,
-  short: toInt,
-  int: toInt,
-  long: toInt,
-  float: toNumber,
-  double: toNumber,
+  short: _.toSafeInteger,
+  int: _.toSafeInteger,
+  long: _.toSafeInteger,
+  float: _.toNumber,
+  double: _.toNumber,
   date: toTimestamp,
   datetime: toTimestamp,
-  string: identity,
+  string: _.identity,
   json: toJSON
-}
+};
 
 function GrokPattern(expression, id) {
     var t = this;
@@ -49,7 +58,7 @@ function GrokPattern(expression, id) {
     t.datePatternDict = {};
     t.resolved = null;
     t.regex = null;
-    
+
     t.parse = function(str, next) {
         if (!t.regexp) {
             t.regexp = new OnigRegExp(t.resolved);
@@ -91,7 +100,7 @@ function GrokPattern(expression, id) {
 
         var result = t.regexp.searchSync(str);
 
-        if(!result)
+        if (!result)
             return null;
 
         var r = {};
@@ -116,6 +125,90 @@ function GrokPattern(expression, id) {
 
         return r;
     };
+
+    t.debug = function(str, grokCollector) {
+        let debugPatt = grokCollector.createPattern(expression, undefined, true);
+
+        if (!debugPatt.regexp) {
+            debugPatt.regexp = new OnigRegExp(debugPatt.resolved);
+        }
+
+        let result = debugPatt.regexp.searchSync(str) || [];
+
+        let canNotMatchPatterns = [];
+
+        // 看哪些 pattern 不能匹配
+        result.forEach(function(item, index) {
+            let field = debugPatt.fields[index];
+            if (field && field !== 'UNWANTED' && !item.match) {
+                canNotMatchPatterns.push(field)
+            }
+        });
+
+        if (canNotMatchPatterns.length !== 0) {
+            return 'Can not match pattern: ' + canNotMatchPatterns.join(', ')
+        }
+        // 其他字符影响了匹配，查找策略：找出能够单独匹配的所有子 pattern，逐个匹配，直到无法匹配为止
+
+        // 'p1 \[p2\] "p3" ((p4|x)|p5) ' -> ['p1 \[', 'p2\] "', 'p3" ', '((p4|x)|p5) ']
+
+        // 'a\nc' -> [{char: 'a'}, {char: 'n', escaped: true}, {char: 'c'}]
+        let exprCharsWithEscaped = expression.split('').reduce((acc, char, idx, chars) => {
+            if (idx !== 0 && chars[idx - 1] === '\\') {
+                acc.pop();
+                acc.push({char: char, escaped: true})
+            } else {
+                acc.push({char: char})
+            }
+            return acc;
+        }, []);
+
+        // '%{xx} ' -> [{char: '%', depthStack: ['{']}, ..., {char: '}', depthStack: ['{']}, {char: ' ', depthStack: []}]
+        const pairDict = {'(': ')', '[': ']', '{': '}'};
+        let exprCharsWithDepth = exprCharsWithEscaped.reduce((acc, charObj, idx) => {
+            let {char: prevChar, escaped: prevCharEscaped, depthStack: prevCharDepthStack} = acc[idx - 1] || {depthStack: []};
+            let {char, escaped} = charObj;
+            let nextDepthStack;
+            if (!prevCharEscaped && prevChar === pairDict[_.last(prevCharDepthStack)]) {
+                nextDepthStack = _.dropRight(prevCharDepthStack, 1)
+            } else {
+                nextDepthStack = prevCharDepthStack
+            }
+            if (!escaped && (char === '{' || char === '[' || char === '(') && _.last(prevCharDepthStack) !== '[') {
+                // 如果是 %{ 则 % 字符深度跟后面的 { 一致
+                nextDepthStack = [...nextDepthStack, char];
+                if (char === '{' && prevChar === '%' && !prevCharEscaped) {
+                    acc.pop();
+                    acc.push({char: prevChar, escaped: prevCharEscaped, depthStack: nextDepthStack})
+                }
+            }
+            acc.push({char, escaped, depthStack: nextDepthStack});
+            return acc
+        }, []);
+
+        // 以 depthStack[0] 分组
+        let charObjGroups = partitionBy(exprCharsWithDepth, (charObj) => _.first(charObj.depthStack));
+        let groupStrs = charObjGroups.map(arr => {
+            return arr.map(charObj => charObj.escaped ? `\\${charObj.char}` : charObj.char).join('')
+        });
+
+        let groupCanNotMatchIdx = _.findIndex(groupStrs, (subPattern, idx) => {
+            let patt = grokCollector.createPattern(_.take(groupStrs, idx + 1).join(''));
+            return _.isEmpty(patt.parseSync(str))
+        });
+
+        if (groupCanNotMatchIdx === -1) {
+            return `Regex parse error: ${expression}`
+        } else if (groupCanNotMatchIdx === 0) {
+            let hint = `Can not match partial regex: “${groupStrs[0]}”, at: 0`;
+            if (groupStrs[1]) {
+                hint += `, before: “${groupStrs[1]}”`
+            }
+            return hint
+        } else {
+            return `Can not match partial regex: “${groupStrs[groupCanNotMatchIdx]}”, at: ${_.take(groupStrs, groupCanNotMatchIdx).join('').length}, after: “${groupStrs[groupCanNotMatchIdx - 1]}”`;
+        }
+    };
 }
 
 // var subPatternsRegex      = /%\{[A-Z0-9_]+(?::[A-Za-z0-9_]+)?\}/g; // %{subPattern} or %{subPattern:fieldName}
@@ -130,15 +223,15 @@ function GrokCollection() {
 
     var patterns = new Map();
 
-    function resolvePattern (pattern) {
-        pattern = resolveSubPatterns(pattern);
+    function resolvePattern (pattern, forDebug /* optional */) {
+        pattern = resolveSubPatterns(pattern, forDebug);
         pattern = resolveFieldNames(pattern);
+        pattern.debug = _.partialRight(pattern.debug, t);
         return pattern;
     }
 
     // detect references to other patterns
-    // TODO: support automatic type conversion (e.g., "%{NUMBER:duration:float}"; see: https://www.elastic.co/guide/en/logstash/current/plugins-filters-grok.html)
-    function resolveSubPatterns (pattern) {
+    function resolveSubPatterns (pattern, forDebug /* optional */) {
         if(!pattern) { return; }
 
         var expression  = pattern.expression;
@@ -159,7 +252,6 @@ function GrokCollection() {
 
             var subPattern = patterns.get(subPatternName);
             if (!subPattern) {
-                // console.error('Error: pattern "' + subPatternName + '" not found!');
                 throw new Error('Error: pattern "' + subPatternName + '" not found!');
             }
 
@@ -175,10 +267,14 @@ function GrokCollection() {
             }
 
             if (!subPattern.resolved) {
-                resolvePattern(subPattern);
+                resolvePattern(subPattern, forDebug);
             }
 
-            expression = expression.replace(matched, '(?<' + fieldName + '>' + subPattern.resolved + ')');
+            if (forDebug) {
+                expression = expression.replace(matched, '(?<' + fieldName + '>' + subPattern.resolved + ')?');
+            } else {
+                expression = expression.replace(matched, '(?<' + fieldName + '>' + subPattern.resolved + ')');
+            }
         });
 
         pattern.resolved = expression;
@@ -236,13 +332,13 @@ function GrokCollection() {
         return i;
     }
 
-    t.createPattern = function (expression, id) {
+    t.createPattern = function (expression, id, forDebug /* optional */) {
         id = id || 'pattern-' + patterns.length;
         if (patterns.has(id)) {
             console.error('Error: pattern with id %s already exists', id);
         } else {
             var pattern = new GrokPattern(expression, id);
-            resolvePattern(pattern);
+            resolvePattern(pattern, forDebug);
             patterns.set(id, pattern);
             return pattern;
         }

@@ -1,12 +1,14 @@
 {
   "name": "node-grok",
-  "version": "2.0.5",
+  "version": "2.0.6",
   "description": "Regular expression template library inspired by logstash grok filter module",
   "repository": "https://github.com/Beh01der/node-grok.git",
   "main": "./lib/index.js",
   "typings": "./lib/index.d.ts",
   "scripts": {
-    "test": "node ./node_modules/mocha/bin/_mocha ./lib/test.js"
+    "test": "npm run build && node ./node_modules/mocha/bin/_mocha ./lib/test.js",
+    "build": "babel index.js test.js -d lib",
+    "prepublish": "npm run test"
   },
   "keywords": [
     "regex",
@@ -24,6 +26,10 @@
     "oniguruma": "6.1.0"
   },
   "devDependencies": {
+    "babel-cli": "^6.26.0",
+    "babel-plugin-lodash": "^3.2.11",
+    "babel-preset-env": "^1.6.0",
+    "babel-preset-stage-0": "^6.24.1",
     "chai": "3.2.0",
     "mocha": "2.2.5"
   }

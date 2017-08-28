@@ -1,7 +1,14 @@
 var grok = require('./index.js');
 var expect = require("chai").expect;
 
+var patternFactory = grok.loadDefaultSync();
+
 function testParse(p, str, expected, done) {
+/*    var patt = patternFactory.createPattern(p);
+    var result = patt.parseSync(str);
+    expect(result).to.be.eql(expected);
+    done()*/
+
 	grok.loadDefault(function (err, patterns) {
 		expect(err).to.be.null;
 
@@ -291,3 +298,58 @@ describe('GrokCollection', function() {
 		});
 	});
 });
+
+describe('Debug', function () {
+    it('Test debug sub pattern match', function (done) {
+        var p   = '%{IPV4:remote_addr} \\- %{NOTSPACE:remote_user} \\[%{HTTPDATE:time_local:date;dd/MMM/yyyy:HH:mm:ss Z}\\] "(?:%{WORD:request_method} %{URIPATH:request_url}(?:%{URIPARAM:request_param})?(?: HTTP/%{NUMBER:http_version})?|(-))" %{NOTSPACE:status} %{BASE16NUM:body_bytes_sent:int} "%{NOTSPACE:http_referer}" "%{GREEDYDATA:http_user_agent}" (?:(?:%{IPV4}[,]?[ ]?)+|%{WORD})';
+        var str = '192.168.0.112 - - [21/Apr/2017:10:55:46 +0800] "GET / HTTP/1.1" 200 612 "-" "Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/56.0.2924.87 Safari/537.36" ';
+
+        var patt = patternFactory.createPattern(p);
+        var result = patt.parseSync(str);
+        expect(result).to.be.eql(null);
+
+        var debugRes = patt.debug(str);
+        expect(debugRes).to.be.eql('Can not match pattern: request_param, IPV4, WORD');
+        done()
+    });
+
+    it('Test debug partial regex err case 1', function (done) {
+        var p   = '%{IPV4:remote_addr} \\- %{NOTSPACE:remote_user} \\[%{HTTPDATE:time_local:date;dd/MMM/yyyy:HH:mm:ss Z}\\] "(?:%{WORD:request_method} %{URIPATH:request_url}(?:%{URIPARAM:request_param})?(?: HTTP/%{NUMBER:http_version})?|(-))" %{NOTSPACE:status} %{BASE16NUM:body_bytes_sent:int} "%{NOTSPACE:http_referer}" "%{GREEDYDATA:http_user_agent}" (?:(?:%{IPV4}[,]?[ ]?)+|%{WORD})';
+        var str = '192.168.0.112 - - [21/Apr/2017:10:55:46 +0800] "GET / HTTP/1.1" 200 612 "-" "Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/56.0.2924.87 Safari/537.36"';
+
+        var patt = patternFactory.createPattern(p);
+        var result = patt.parseSync(str);
+        expect(result).to.be.eql(null);
+
+        var debugRes = patt.debug(str);
+        expect(debugRes).to.be.eql('Can not match partial regex: “" ”, at: 330, after: “%{GREEDYDATA:http_user_agent}”');
+        done()
+    });
+
+    it('Test debug partial regex err case 2', function (done) {
+        var p   = '%{IPV4:remote_addr} \\- %{NOTSPACE:remote_user} \\[%{HTTPDATE:time_local:date;dd/MMM/yyyy:HH:mm:ss Z}\\] "(?:%{WORD:request_method} %{URIPATH:request_url}(?:%{URIPARAM:request_param})?(?: HTTP/%{NUMBER:http_version})?|(-))" %{NOTSPACE:status} %{BASE16NUM:body_bytes_sent:int} "%{NOTSPACE:http_referer}" "%{GREEDYDATA:http_user_agent}" (?:(?:%{IPV4}[,]?[ ]?)+|%{WORD})';
+        var str = '192.168.0 - - [21/Apr/2017:10:55:46 +0800] "GET / HTTP/1.1" 200 612 "-" "Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/56.0.2924.87 Safari/537.36"';
+
+        var patt = patternFactory.createPattern(p);
+        var result = patt.parseSync(str);
+        expect(result).to.be.eql(null);
+
+        var debugRes = patt.debug(str);
+        expect(debugRes).to.be.eql('Can not match partial regex: “%{IPV4:remote_addr}”, at: 0, before: “ \\- ”');
+        done()
+    });
+
+    it('Test debug partial regex err case 3', function (done) {
+        var p   = '%{IPV4:remote_addr} \\- %{NOTSPACE:remote_user} \\[%{HTTPDATE:time_local:date;dd/MMM/yyyy:HH:mm:ss Z}\\] "(?:%{WORD:request_method} %{URIPATH:request_url}(?:%{URIPARAM:request_param})?(?: HTTP/%{NUMBER:http_version})?|(-))" %{NOTSPACE:status} %{BASE16NUM:body_bytes_sent:int} "%{NOTSPACE:http_referer}" "%{GREEDYDATA:http_user_agent}" (?:(?:%{IPV4}[,]?[ ]?)+|%{WORD})';
+        var str = '192.168.0.1 - [21/Apr/2017:10:55:46 +0800] "GET / HTTP/1.1" 200 612 "-" "Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/56.0.2924.87 Safari/537.36"';
+
+        var patt = patternFactory.createPattern(p);
+        var result = patt.parseSync(str);
+        expect(result).to.be.eql(null);
+
+        var debugRes = patt.debug(str);
+        expect(debugRes).to.be.eql('Can not match partial regex: “ \\[”, at: 46, after: “%{NOTSPACE:remote_user}”');
+        done()
+    });
+});
+
