@@ -259,6 +259,9 @@ function GrokCollection() {
             }
 
             // heganjie: 将 valType 和 dateParseFormat 保存到 typeDict 和 datePatternDict
+            if (fieldName !== 'UNWANTED' && fieldName in typeDict) {
+                throw new Error(`Field name conflict: ${fieldName}`)
+            }
             if (valType) {
                 if (!(valType in TypeConverter)) {
                     throw new Error('Type not support: ' + valType)

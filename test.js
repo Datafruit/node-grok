@@ -277,6 +277,17 @@ describe('grok', function() {
 
             testParse(p, str, expected, done);
         });
+
+        it('Not allow conflict field name', function (done) {
+            var p   = '%{NOTSPACE:remote_host_name:string} %{NOTSPACE:remote_logical_username:string} %{NOTSPACE:remote_user:string} \\[%{HTTPDATE:log_time:date;dd/MMM/yyyy:HH:mm:ss Z}\\] "(?:%{WORD:request_method} %{URIPATH:request_url}(?:%{URIPARAM:request_param})?(?: HTTP/%{NUMBER:http_version})?|(-))" %{NOTSPACE:http_status_code:string} %{NOTSPACE:bytes_sent:int} %{BASE16FLOAT:process_time:float} %{IPV4:local_ip_address:string} %{IPV4:remote_ip_address:string} %{NOTSPACE:request_protocol:string} %{NOTSPACE:local_port:string} %{NOTSPACE:user_session_id:string} %{URIPATH:requested_url_path:string} %{NOTSPACE:local_server_name:string} %{BASE16FLOAT:process_time:float}';
+            var str = '192.168.0.125 - - [25/Aug/2017:16:32:17 +0800] "GET /favicon.ico HTTP/1.1" 200 21630 0.001 69.172.201.153 192.168.0.125 HTTP/1.1 8080 - /favicon.ico 192.168.0.202 1';
+
+            expect(function () {
+                done();
+                var patt = patternFactory.createPattern(p);
+                patt.parseSync(str);
+            }).to.throw('Field name conflict: process_time');
+        });
 	});
 });
 
