@@ -129,7 +129,9 @@ describe('grok', function() {
 			var str = '(ALTERNATIVE)';
 			var expected = {
 				all:         '(ALTERNATIVE)',
-				alternative: '(ALTERNATIVE)'
+				alternative: '(ALTERNATIVE)',
+				url: null, // top layer sub pattern always emit
+				verb: null
 			};
 
 			testParse(p, str, expected, done);
@@ -187,7 +189,10 @@ describe('grok', function() {
 			var expected = {
 				http_verb:                'GET',
 				http_request:             '/ping',
-				http_version:             '1.1'
+				http_version:             '1.1',
+				http_host: null, // top layer sub pattern always emit
+				http_proto: null,
+				http_user: null
 			};
 
 			testParse(p, str, expected, done);

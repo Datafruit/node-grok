@@ -64,27 +64,28 @@ function GrokPattern(expression, id) {
             t.regexp = new OnigRegExp(t.resolved);
         }
 
-        var typeDict = t.typeDict;
-        var datePatternDict = t.datePatternDict;
+        let typeDict = t.typeDict;
+        let datePatternDict = t.datePatternDict;
 
         t.regexp.search(str, function(err, result) {
             if (err || !result)
                 return next(err, result);
 
-            var r = {};
+            let r = {};
 
             result.forEach(function(item, index) {
-                var field = t.fields[index];
-                if (field && field !== 'UNWANTED' && item.match) {
-                    var type = typeDict[field];
+                let field = t.fields[index];
+                if (field && field !== 'UNWANTED' && (item.match || field in typeDict)) {
+                    let matchVal = item.match || null;
+                    let type = typeDict[field];
                     if (type && type in TypeConverter) {
                         if (type === 'date' || type === 'datetime') {
-                            r[field] = TypeConverter[type](item.match, datePatternDict[field]);
+                            r[field] = TypeConverter[type](matchVal, datePatternDict[field]);
                         } else {
-                            r[field] = TypeConverter[type](item.match);
+                            r[field] = TypeConverter[type](matchVal);
                         }
                     } else {
-                        r[field] = item.match;
+                        r[field] = matchVal;
                     }
                 }
             });
@@ -98,27 +99,28 @@ function GrokPattern(expression, id) {
             t.regexp = new OnigRegExp(t.resolved);
         }
 
-        var result = t.regexp.searchSync(str);
+        let result = t.regexp.searchSync(str);
 
         if (!result)
             return null;
 
-        var r = {};
-        var typeDict = t.typeDict;
-        var datePatternDict = t.datePatternDict;
+        let r = {};
+        let typeDict = t.typeDict;
+        let datePatternDict = t.datePatternDict;
 
         result.forEach(function(item, index) {
-            var field = t.fields[index];
-            if (field && field !== 'UNWANTED' && item.match) {
-                var type = typeDict[field];
+            let field = t.fields[index];
+            if (field && field !== 'UNWANTED' && (item.match || field in typeDict)) {
+                let matchVal = item.match || null;
+                let type = typeDict[field];
                 if (type && type in TypeConverter) {
                     if (type === 'date' || type === 'datetime') {
-                        r[field] = TypeConverter[type](item.match, datePatternDict[field]);
+                        r[field] = TypeConverter[type](matchVal, datePatternDict[field]);
                     } else {
-                        r[field] = TypeConverter[type](item.match);
+                        r[field] = TypeConverter[type](matchVal);
                     }
                 } else {
-                    r[field] = item.match;
+                    r[field] = matchVal;
                 }
             }
         });
@@ -206,7 +208,8 @@ function GrokPattern(expression, id) {
             }
             return hint
         } else {
-            return `Can not match partial regex: “${groupStrs[groupCanNotMatchIdx]}”, at: ${_.take(groupStrs, groupCanNotMatchIdx).join('').length}, after: “${groupStrs[groupCanNotMatchIdx - 1]}”`;
+            let at = _.sum(_.take(groupStrs, groupCanNotMatchIdx).map(s => s.length));
+            return `Can not match partial regex: “${groupStrs[groupCanNotMatchIdx]}”, at: ${at}, after: “${groupStrs[groupCanNotMatchIdx - 1]}”`;
         }
     };
 }
@@ -261,6 +264,8 @@ function GrokCollection() {
                     throw new Error('Type not support: ' + valType)
                 }
                 typeDict[fieldName] = valType;
+            } else {
+                typeDict[fieldName] = 'string';
             }
             if (dateParseFormat) {
                 datePatternDict[fieldName] = mObj.toMomentFormatString(dateParseFormat);
