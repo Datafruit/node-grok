@@ -288,6 +288,17 @@ describe('grok', function() {
                 patt.parseSync(str);
             }).to.throw('Field name conflict: process_time');
         });
+
+        it('field name not allow "-" char', function (done) {
+            var p   = '%{NOTSPACE:remote_host_name:string} %{NOTSPACE:remote_log_name:string} %{NOTSPACE:remote_user:string} \\[%{HTTPDATE:log_time:date;dd/MMM/yyyy:HH:mm:ss Z}\\] "(?:%{WORD:request_method} %{URIPATH:request_url}(?:%{URIPARAM:request_param})?(?: HTTP/%{NUMBER:http_version})?|(-))" %{NOTSPACE:http_status_code:string} %{BASE16NUM:body_bytes_sent_b:int} "%{GREEDYDATA:Referer}" "%{GREEDYDATA:User-agent}"';
+            var str = '192.168.0.225 - - [30/Aug/2017:18:07:25 +0800] "GET /yum/SG/centos6/1.0/druid-1.0.0-bin.tar.gz HTTP/1.0" 200 161333748 "-" "Wget/1.12 (linux-gnu)"';
+
+            expect(function () {
+                done();
+                var patt = patternFactory.createPattern(p);
+                patt.parseSync(str);
+            }).to.throw('Invalid field name: User-agent');
+        });
 	});
 });
 

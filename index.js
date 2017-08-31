@@ -220,6 +220,7 @@ function GrokPattern(expression, id) {
 var subPatternsRegex      = /%{[A-Z0-9_]+(?:[:;][^;]+?)?(?:[:;][^;]+?)?(?:[:;][^;]+?)?}/g;
 var subPatternGroupRegex      = /^%{([A-Z0-9_]+)(?:[:;]([^;]+?))?(?:[:;]([^;]+?))?(?:[:;]([^;]+?))?}$/;
 var nestedFieldNamesRegex = /(\(\?<([A-Za-z0-9_]+)>)|\(\?:|\(\?>|\(\?!|\(\?<!|\(|\\\(|\\\)|\)|\[|\\\[|\\\]|\]/g;
+var fieldNameInvalidChar = /[^\w]/;
 
 function GrokCollection() {
     var t = this;
@@ -261,6 +262,9 @@ function GrokCollection() {
             // heganjie: 将 valType 和 dateParseFormat 保存到 typeDict 和 datePatternDict
             if (fieldName !== 'UNWANTED' && fieldName in typeDict) {
                 throw new Error(`Field name conflict: ${fieldName}`)
+            }
+            if (fieldNameInvalidChar.test(fieldName)) {
+                throw new Error(`Invalid field name: ${fieldName}`)
             }
             if (valType) {
                 if (!(valType in TypeConverter)) {
